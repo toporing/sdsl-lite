@@ -896,6 +896,15 @@ class bp_support_sada
 		/*! The size of the supported balanced parentheses sequence.
          * \return the size of the supported balanced parentheses sequence.
          */
+
+
+	// ! Return the opening parenthesis of the lowest common ancestor of the opening parentheses at i and j
+	size_type lca(size_type i, size_type j){
+	  if(i>j) std::swap(i,j);
+	  return enclose(rmq(i,j)+1);
+
+	}
+
         size_type size() const
         {
             return m_size;

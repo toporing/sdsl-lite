@@ -471,14 +471,14 @@ class wm_int
 
 	value_type range_minimum_query(size_type i, size_type j) const
 	{
-	    return _range_minimum_query(i, j, 0, 0, 0);	
+	    return _range_minimum_query(i, j, 0, 0, 0);
 	}
 
 	value_type _range_minimum_query(size_type i, size_type j,
                                          uint32_t depth, size_type b,
                                          value_type res) const
 	{
-	    if (depth == m_max_level)
+	   if (depth == m_max_level)
 	        return res;
 	    else {
 	        size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
@@ -515,7 +515,16 @@ class wm_int
         };
 
 
-	value_type _range_next_value_min(size_type i, size_type j, 
+	value_type range_prev_value(value_type x, size_type i, size_type j) const
+	{
+            if (((1ULL)<<(m_max_level))<=x) { // c is greater than any symbol in wt
+		x = ((1ULL)<<(m_max_level));
+            }
+            return _range_prev_value(x, i, j, 0, 0, 0);
+        };
+
+
+	value_type _range_next_value_min(size_type i, size_type j,
                                          uint32_t depth, size_type b,
                                          value_type res) const
         {
@@ -525,10 +534,10 @@ class wm_int
                 return res;
             else {
                 size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
-                size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i) 
+                size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
                 size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b;
                 size_type ones_p   = rank_0_b - m_rank_level[depth];
- 
+
                 size_type i_l = i - rank_b_i; // zeroes in [b..i)
                 size_type j_l = j - rank_b_j;
                 size_type i_r = i - i_l;
@@ -541,25 +550,59 @@ class wm_int
                     res |= 1;
                     return _range_next_value_min(i_r, j_r, depth+1, b, res);
                 } else { // recurse on the left child
-                    b = (depth+1)*m_size + (b - depth*m_size - ones_p);	
+                    b = (depth+1)*m_size + (b - depth*m_size - ones_p);
                     return _range_next_value_min(i_l, j_l, depth+1, b, res);
                 }
             }
         };
 
+	value_type _range_prev_value_max(size_type i, size_type j,
+                                         uint32_t depth, size_type b,
+                                         value_type res) const
+        {
+	    // cerr <<"llamo con b="<<b<<endl;
+            if (b+i > b+j) return 0;
 
-        value_type _range_next_value(value_type x, size_type i, size_type j, 
+            if (depth == m_max_level)
+                return res;
+            else {
+                size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+                size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+                size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b;
+                size_type ones_p   = rank_0_b - m_rank_level[depth];
+
+                size_type i_l = i - rank_b_i; // zeroes in [b..i)
+                size_type j_l = j - rank_b_j;
+                size_type i_r = i - i_l;
+                size_type j_r = j - 1 - j_l;
+                size_type n_r = j_r - i_r + 1;
+
+                res <<= 1;
+                if (n_r != 0) { // at least one element on right child
+                    b = (depth+1)*m_size + m_zero_cnt[depth] + ones_p;
+                    res |= 1;
+                    return _range_prev_value_max(i_r, j_r, depth+1, b, res);
+                } else { // recurse on the left child if no elements on the right
+                    b = (depth+1)*m_size + (b - depth*m_size - ones_p);
+                    return _range_prev_value_max(i_l, j_l, depth+1, b, res);
+                }
+            }
+        };
+
+
+        value_type _range_next_value(value_type x, size_type i, size_type j,
                                      uint32_t depth, size_type b,
                                      value_type res) const
         {
-            if (b+i > b+j) 
+	    // cerr <<"llamo con b="<<b<<endl;
+            if (b+i > b+j)
                 return 0;
-            else 
+            else
                 if (depth == m_max_level)
                     return res;
                 else {
                     size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
-                    size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i) 
+                    size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
                     size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b;
                     size_type ones_p   = rank_0_b - m_rank_level[depth];
 		    size_type i_l = i - rank_b_i; // zeroes in [b..i)
@@ -574,7 +617,7 @@ class wm_int
                         res |= 1;
                         return _range_next_value(x, i_r, j_r, depth+1, b, res);
                     } else { // recurse on the left child
-                        b = (depth+1)*m_size + (b - depth*m_size - ones_p); 
+                        b = (depth+1)*m_size + (b - depth*m_size - ones_p);
                         value_type y = _range_next_value(x, i_l, j_l, depth+1, b, res);
 
                         if (y != 0)
@@ -585,15 +628,474 @@ class wm_int
                             return _range_next_value_min(i_r, j_r, depth+1, b, res);
                         }
                     }
-                }					
+                }
         };
 
 
+        value_type _range_prev_value(value_type x, size_type i, size_type j,
+                                     uint32_t depth, size_type b,
+                                     value_type res) const
+        {
+	    // cerr <<"llamo con b="<<b<<endl;
+            if (b+i > b+j)
+                return 0;
+            else
+                if (depth == m_max_level)
+                    return res;
+                else {
+                    size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+                    size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+                    size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b;
+                    size_type ones_p   = rank_0_b - m_rank_level[depth];
+		    size_type i_l = i - rank_b_i; // zeroes in [b..i)
+                    size_type j_l = j - rank_b_j;
+                    size_type i_r = i - i_l;
+                    size_type j_r = j - 1 - j_l;
+
+                    uint64_t mask = (1ULL) << (m_max_level-1-depth);
+                    res <<= 1;
+                    if ((x & mask)==0) { // recurse on the left child
+                        size_type newb = (depth+1)*m_size + (b - depth*m_size - ones_p);
+                        //res |= 1;
+                        return _range_prev_value(x, i_l, j_l, depth+1, newb, res);
+                    } else { // recurse on the right child
+                        size_type newb = (depth+1)*m_size + m_zero_cnt[depth] + ones_p;
+                        value_type y = _range_prev_value(x, i_r, j_r, depth+1, newb, res|1);
+
+                        if (y != 0)
+                            return y;
+                        else {
+                            size_type newb = (depth+1)*m_size + (b - depth*m_size - ones_p);
+                            return _range_prev_value_max(i_l, j_l, depth+1, newb, res);
+                        }
+                    }
+                }
+        };
+
+
+        // Implemented by Alexander Irribarra, based on Diego Arroyuelo's range_next_value
+        //! Calculates v[k], where k is the leftmost index in [i,j] such that v[k] \geq x
+        //! Returns 0 if no such k exists
+        /*!
+         *  \param x The minimum symbol x
+         *  \param i The lower bound
+         *  \param j The upper bound
+         *  \par Time complexity
+         *       \f$ \Order{\log |\Sigma|} \f$
+         */
+      	value_type leftmost(value_type x, size_type i, size_type j) const
+      	{
+                  if (((1ULL)<<(m_max_level))<=x) { // x is greater than any symbol in wt
+                      return 0;
+                  }
+      	    size_type pos = 0;
+                  // cout << "call leftmost "<< x <<" "<< i <<" "<< j <<endl;
+                  pos= _leftmost(x, root(),i,j);
+                  if (pos<i or pos>j) return 0;
+                  return (*this)[pos];
+                  // return _leftmost(x, i, j, 0, 0, 0,pos,0);
+        };
+
+        size_type _leftmost(value_type x, node_type v, size_type i, size_type j) const{
+          // at max depth, return the answer
+          size_type b = v.offset;
+          uint32_t depth = v.level;
+
+          // cout <<"call leftmost "<< x<<" "<<i<<" "<<j <<endl;
+
+          if( depth==m_max_level){
+            return i;
+          }
+          // cout <<s<<endl;
+          size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+          size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+          size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b; // ones in [b..j)
+          size_type ones_p   = rank_0_b - m_rank_level[depth];
+          size_type i_l = i - rank_b_i; // zeroes in [b..i)
+          size_type j_l = j - rank_b_j;
+          size_type i_r = i - i_l;
+          size_type j_r = j -1 - j_l;
+
+
+
+
+          // get bit
+          uint64_t mask = (1ULL) << (m_max_level-1-depth);
+          if(x&mask){
+            // cout <<  "must go right "<<endl;
+            node_type rightChild = get<1>(expand(v));
+            size_type pos_in_right_child = -1;
+            size_type pos_right = -1;
+            //  empty intersection
+            if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+              return j+1;
+            }else{
+              pos_in_right_child = _leftmost(x, rightChild, i_r, j_r);
+              // cout << "select "<<pos_in_right_child<<" 1"<<endl;
+              if(pos_in_right_child==j_r+1) return j+1;
+              pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+
+            }
+            return pos_right-b;
+            //answer must be on right tree
+          }
+          size_type pos_right;
+          if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+            pos_right = b+j+1;
+          }else{
+            pos_right = m_tree_select1(rank_0_b+rank_b_i+1);
+          }
+          node_type leftChild = get<0>(expand(v));
+          size_type pos_in_left_child = -1;
+          size_type pos_left = -1;
+
+          pos_in_left_child = _leftmost(x, leftChild, i_l, j_l);
+          // size_type num_zeros_0_i = b+i-m_tree_rank(b + i);
+          // cout << "select "<<pos_in_left_child<<" 0"<<endl;
+          if(pos_in_left_child==j_l+1) pos_left= b+j+1;
+          else pos_left = m_tree_select0(b-rank_0_b+ pos_in_left_child+1);
+
+          
+          if(pos_left+1!=0 && pos_left < pos_right){
+            return pos_left-b;
+          }else{
+            return pos_right-b;
+          }
+        }
+
+
+
+
+
+	// implemented by A. Irribarra
+	//leftmost position p, i \leq p \leq j such that v[p] \in [vlb, vrb]
+
+      	size_type leftmost(value_type vlb, value_type vrb, size_type i, size_type j) const
+      	{
+                  if (((1ULL)<<(m_max_level))<=vlb) { // x is greater than any symbol in wt
+                      return 0;
+                  }
+      	    size_type pos = 0;
+                  // cout << "call leftmost "<< x <<" "<< i <<" "<< j <<endl;
+                  pos= _leftmost(vlb, vrb, 0,
+		      root(),i,j);
+                  if (pos<i or pos>j) return size();
+                  return pos;
+                  // return _leftmost(x, i, j, 0, 0, 0,pos,0);
+        };
+
+        size_type _leftmost(value_type vlb, value_type vrb, value_type ilb,
+	    node_type v, size_type i, size_type j) const{
+          // at max depth, return the answer
+          size_type b = v.offset;
+          uint32_t depth = v.level;
+
+          // cout <<"call leftmost "<< x<<" "<<i<<" "<<j <<endl;
+
+          if( depth==m_max_level){
+            return i;
+          }
+
+
+          // cout <<s<<endl;
+          size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+          size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+          size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b; // ones in [b..j)
+          size_type ones_p   = rank_0_b - m_rank_level[depth];
+          size_type i_l = i - rank_b_i; // zeroes in [b..i)
+          size_type j_l = j - rank_b_j;
+          size_type i_r = i - i_l;
+          size_type j_r = j -1 - j_l;
+
+
+
+          size_type irb = ilb + (1ULL << (m_max_level-v.level));
+          size_type mid = (irb + ilb)>>1;
+
+
+	  if( vlb <= ilb && irb<=vlb){
+	    // node alphabet is completely contained in search range, return leftmost
+	    return i;
+	  }
+
+          // get bit
+	  /*
+          uint64_t mask = (1ULL) << (m_max_level-1-depth);
+          if(x&mask){
+            // cout <<  "must go right "<<endl;
+            node_type rightChild = get<1>(expand(v));
+            size_type pos_in_right_child = -1;
+            size_type pos_right = -1;
+            //  empty intersection
+            if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+              return j+1;
+            }else{
+              pos_in_right_child = _leftmost(x, rightChild, i_r, j_r);
+              // cout << "select "<<pos_in_right_child<<" 1"<<endl;
+              if(pos_in_right_child==j_r+1) return j+1;
+              pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+
+            }
+            return pos_right-b;
+            //answer must be on right tree
+          }
+	  */
+          node_type leftChild = get<0>(expand(v));
+          node_type rightChild = get<1>(expand(v));
+          size_type pos_in_left_child = -1;
+          size_type pos_left = -1;
+
+          size_type pos_in_right_child = -1;
+          size_type pos_right = -1;
+
+	  if( mid-1 >= vlb )
+	      pos_in_left_child = _leftmost(vlb, vrb, ilb,
+	        leftChild, i_l, j_l);
+	  else pos_in_left_child = j_l+1;
+          // size_type num_zeros_0_i = b+i-m_tree_rank(b + i);
+          // cout << "select "<<pos_in_left_child<<" 0"<<endl;
+          if(pos_in_left_child==j_l+1) pos_left= b+j+1;
+          else pos_left = m_tree_select0(b-rank_0_b+ pos_in_left_child+1);
+	  // decompose into subranges [ilb, mid-1] [mid, irb]
+	  
+	  // check that they intersect with [vlb, vrb]
+	  if(mid <= vrb)
+              pos_in_right_child = _leftmost(vlb, vrb, mid,
+	  	rightChild, i_r, j_r);
+	  else pos_in_right_child = j_r+1;
+          // cout << "select "<<pos_in_right_child<<" 1"<<endl;
+          if(pos_in_right_child==j_r+1) pos_right = b+j+1;
+	  else pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+          
+          if(pos_left+1!=0 && pos_left < pos_right){
+            return pos_left-b;
+          }else{
+            return pos_right-b;
+          }
+        }
+
+
+
+	// implemented by A. Irribarra
+	//rightmost position p, i \leq p \leq j such that v[p] \in [vlb, vrb]
+
+      	size_type rightmost(value_type vlb, value_type vrb, size_type i, size_type j) const
+      	{
+                  if (((1ULL)<<(m_max_level))<=vlb) { // x is greater than any symbol in wt
+                      return 0;
+                  }
+      	    size_type pos = 0;
+                  // cout << "call leftmost "<< x <<" "<< i <<" "<< j <<endl;
+                  pos= _rightmost(vlb, vrb, 0,
+		      root(),i,j);
+                  if (pos<i or pos>j) return size();
+                  return pos;
+                  // return _leftmost(x, i, j, 0, 0, 0,pos,0);
+        };
+
+        size_type _rightmost(value_type vlb, value_type vrb, value_type ilb,
+	    node_type v, size_type i, size_type j) const{
+          // at max depth, return the answer
+          size_type b = v.offset;
+          uint32_t depth = v.level;
+
+          size_type irb = ilb + (1ULL << (m_max_level-v.level));
+          size_type mid = (irb + ilb)>>1;
+
+	  if(i>j or j+1==0) return i-1;
+
+	  if( vlb <= ilb && irb<=vlb){
+	    // node alphabet is completely contained in search range, return leftmost
+	    return j;
+	  }
+          //cout <<"call rightmost "<< vlb<<" " <<vrb<<" "<<i<<" "<<j <<endl;
+
+          if( depth==m_max_level){
+            return j;
+          }
+          // cout <<s<<endl;
+          size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+          size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+          size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b; // ones in [b..j)
+          size_type ones_p   = rank_0_b - m_rank_level[depth];
+          size_type i_l = i - rank_b_i; // zeroes in [b..i)
+          size_type j_l = j - rank_b_j;
+          size_type i_r = i - i_l;
+          size_type j_r = j -1 - j_l;
+
+
+
+
+          // get bit
+	  /*
+          uint64_t mask = (1ULL) << (m_max_level-1-depth);
+          if(x&mask){
+            // cout <<  "must go right "<<endl;
+            node_type rightChild = get<1>(expand(v));
+            size_type pos_in_right_child = -1;
+            size_type pos_right = -1;
+            //  empty intersection
+            if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+              return j+1;
+            }else{
+              pos_in_right_child = _leftmost(x, rightChild, i_r, j_r);
+              // cout << "select "<<pos_in_right_child<<" 1"<<endl;
+              if(pos_in_right_child==j_r+1) return j+1;
+              pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+
+            }
+            return pos_right-b;
+            //answer must be on right tree
+          }
+	  */
+          node_type leftChild = get<0>(expand(v));
+          node_type rightChild = get<1>(expand(v));
+          size_type pos_in_left_child = i_l-1;
+          size_type pos_left = b+i-1;
+
+          size_type pos_in_right_child = i_r-1;
+          size_type pos_right = b+i-1;
+
+	  //cout << "i_l,j_l = " <<i_l <<" " << j_l <<endl;
+	  //cout << "i_r,j_r = " <<i_r <<" " << j_r <<endl;
+
+	  if( mid-1 >= vlb and i_l+1 <= j_l+1 )
+	      pos_in_left_child = _rightmost(vlb, vrb, ilb,
+	        leftChild, i_l, j_l);
+	  else pos_in_left_child = i_l-1;
+          // size_type num_zeros_0_i = b+i-m_tree_rank(b + i);
+          // //cout << "select "<<pos_in_left_child<<" 0"<<endl;
+          if(pos_in_left_child==i_l-1) pos_left= b+i-1;
+          else pos_left = m_tree_select0(b-rank_0_b+ pos_in_left_child+1);
+	  // decompose into subranges [ilb, mid-1] [mid, irb]
+	  
+	  // check that they intersect with [vlb, vrb]
+	  if(mid <= vrb and i_r+1 <= j_r+1)
+              pos_in_right_child = _rightmost(vlb, vrb, mid,
+	  	rightChild, i_r, j_r);
+	  else pos_in_right_child = i_r-1;
+          // //cout << "select "<<pos_in_right_child<<" 1"<<endl;
+          if(pos_in_right_child==i_r-1) pos_right = b+i-1;
+	  else pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+          
+          if(pos_left+1!=0 && pos_left+1 > pos_right+1){
+	    //cout <<" left " <<endl;
+	    //cout << pos_left << endl;
+	    //cout << b <<endl;
+	    //cout << "returning " <<pos_left-b<<endl;
+            return pos_left-b;
+          }else{
+	    //cout <<" right " <<endl;
+	    //cout << pos_right << endl;
+	    //cout << b <<endl;
+	    //cout << "returning " <<pos_right-b<<endl;
+            return pos_right-b;
+          }
+        }
+
+
+
+        // Implemented by A. Irribarra, based on Diego Arroyuelo's range_next_value
+        //! Calculates v[k], where k is the leftmost index in [i,j] such that v[k] \geq x
+        //! Returns 0 if no such k exists
+        /*!
+         *  \param x The minimum symbol x
+         *  \param i The lower bound
+         *  \param j The upper bound
+         *  \par Time complexity
+         *       \f$ \Order{\log |\Sigma|} \f$
+         */
+      	value_type rightmost(value_type x, size_type i, size_type j) const
+      	{
+                  if (((1ULL)<<(m_max_level))<=x) { // x is greater than any symbol in wt
+                      return 0;
+                  }
+      	    size_type pos = 0;
+                  // cout << "call leftmost "<< x <<" "<< i <<" "<< j <<endl;
+                  pos= _rightmost(x, root(),i,j);
+                  if (pos<i or pos>j or (*this)[pos]<x) return 0;
+                  return (*this)[pos];
+                  // return _leftmost(x, i, j, 0, 0, 0,pos,0);
+        };
+
+        size_type _rightmost(value_type x, node_type v, size_type i, size_type j) const{
+          // at max depth, return the answer
+          size_type b = v.offset;
+          uint32_t depth = v.level;
+
+          // cout <<"call leftmost "<< x<<" "<<i<<" "<<j <<endl;
+
+          if( depth==m_max_level){
+            return j;
+          }
+          // cout <<s<<endl;
+          size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
+          size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
+          size_type rank_b_j = m_tree_rank(b + j + 1) - rank_0_b; // ones in [b..j)
+          size_type ones_p   = rank_0_b - m_rank_level[depth];
+          size_type i_l = i - rank_b_i; // zeroes in [b..i)
+          size_type j_l = j - rank_b_j;
+          size_type i_r = i - i_l;
+          size_type j_r = j -1 - j_l;
+
+
+
+
+          // get bit
+          uint64_t mask = (1ULL) << (m_max_level-1-depth);
+          if(x&mask){
+            // cout <<  "must go right "<<endl;
+            node_type rightChild = get<1>(expand(v));
+            size_type pos_in_right_child = -1;
+            size_type pos_right = -1;
+            //  empty intersection
+            if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+              return i-1;
+            }else{
+              pos_in_right_child = _rightmost(x, rightChild, i_r, j_r);
+              // cout << "select "<<pos_in_right_child<<" 1"<<endl;
+              if(pos_in_right_child==i_r-1) return i-1;
+              pos_right = m_tree_select1(rank_0_b+pos_in_right_child+1);
+
+            }
+            return pos_right-b;
+            //answer must be on right tree
+          }
+          size_type pos_right;
+          if(rank_b_i==rank_b_j and m_tree[b+i]!=1){
+            pos_right = b+i-1;
+          }else{
+            pos_right = m_tree_select1(rank_0_b+rank_b_j);
+          }
+          node_type leftChild = get<0>(expand(v));
+          size_type pos_in_left_child = -1;
+          size_type pos_left = -1;
+
+          pos_in_left_child = _rightmost(x, leftChild, i_l, j_l);
+          // size_type num_zeros_0_i = b+i-m_tree_rank(b + i);
+          // cout << "select "<<pos_in_left_child<<" 0"<<endl;
+          if(pos_in_left_child==i_l-1) pos_left= b+i-1;
+          else pos_left = m_tree_select0(b-rank_0_b+ pos_in_left_child+1);
+
+
+          if(pos_left+1!=0 && pos_left+1 > pos_right+1){
+            return pos_left-b;
+          }else{
+            return pos_right-b;
+          }
+        }
+
+
+
+
+
+
+
         // Implemented by Diego Arroyuelo
-        // Given a value x and a range [i, j], returns  a pair (r, k) such that k is the lefmost index such that i \le k \le j 
-        // such that s[k] = r \ge x holds (here s is the indexed sequence). 
+        // Given a value x and a range [i, j], returns  a pair (r, k) such that k is the lefmost index such that i \le k \le j
+        // such that s[k] = r \ge x holds (here s is the indexed sequence).
         // The second component is j+1 if x is greater than any value in s[i..j].
-        std::pair<value_type,size_type> range_next_value_pos(value_type x, size_type i, size_type j) 
+        std::pair<value_type,size_type> range_next_value_pos(value_type x, size_type i, size_type j)
         {
             if (((1ULL)<<(m_max_level))<=x) { // c is greater than any symbol in wt
                 return std::pair<value_type,size_type>((value_type)-1,(size_type)-1);
@@ -616,7 +1118,7 @@ class wm_int
             if (depth == m_max_level) {
 	        pos = i+1;
                 return res;
-            }		
+            }
             else {
                 size_type rank_0_b = m_tree_rank(b); // ones in [0..b)
                 size_type rank_b_i = m_tree_rank(b + i) - rank_0_b; // ones in [b..i)
@@ -649,7 +1151,7 @@ class wm_int
 
         value_type _range_next_value_pos(value_type x, size_type i, size_type j,
                                           uint32_t depth, size_type b,
-                                          value_type res, size_type& pos) 
+                                          value_type res, size_type& pos)
         {
             if (b+i > b+j) {
                 pos = j+2;
@@ -681,7 +1183,7 @@ class wm_int
                         else
                             pos = j+2;
                         return temp;
-                        
+
                     } else { // recurse on the left child
                         size_type ant_b = b;
                         b = (depth+1)*m_size + (b - depth*m_size - ones_p);
@@ -718,7 +1220,7 @@ class wm_int
             size_type r = i;
             uint64_t pos = 1; // assume positions in B_wt array start at 1
             for (uint32_t k=0; k < m_max_level and i; ++k) {
-                size_type rank_b = m_tree_rank(b); 
+                size_type rank_b = m_tree_rank(b);
                 size_type ones   = m_tree_rank(b + r) - rank_b; // ones in [b..i)
                 size_type ones_p = rank_b - m_rank_level[k];    // ones in [0..b)
                 B_wt[pos] |= B_c;
@@ -732,7 +1234,7 @@ class wm_int
                     pos = 2*pos;
                 }
                 mask >>= 1;
-                m_path_off[k+1] = b; 
+                m_path_off[k+1] = b;
                 m_path_rank_off[k] = rank_b;
             }
             B_wt[pos] |= B_c;   // esto no deberia ser necesario si al buscar uso el arreglo B
@@ -754,7 +1256,7 @@ class wm_int
             size_type r = i;
             uint64_t pos = 1; // assume positions in B_wt array start at 1
             for (uint32_t k=0; k < m_max_level and i; ++k) {
-                size_type rank_b = m_tree_rank(b); 
+                size_type rank_b = m_tree_rank(b);
                 size_type ones   = m_tree_rank(b + r) - rank_b; // ones in [b..i)
                 size_type ones_p = rank_b - m_rank_level[k];    // ones in [0..b)
                 B_wt[pos] &= 0;
@@ -772,7 +1274,7 @@ class wm_int
                 m_path_rank_off[k] = rank_b;
             }
         };
-        
+
 
         // Implemented by Diego Arroyuelo
         std::vector<value_type>
@@ -790,31 +1292,31 @@ class wm_int
         }
 
         // Implemented by Diego Arroyuelo
-        void 
-        all_values_in_range_bounded(size_type lb, size_type rb, 
-                                    std::vector<value_type>& res_vec, 
+        void
+        all_values_in_range_bounded(size_type lb, size_type rb,
+                                    std::vector<value_type>& res_vec,
                                     size_type bound, bool report=true) const
         {
 	    size_type cnt_answers = 0;
 	    if (lb <= rb)  {
-		_all_values_in_range_bounded(root(), {lb, rb}, 0, res_vec, report, 
+		_all_values_in_range_bounded(root(), {lb, rb}, 0, res_vec, report,
                                              cnt_answers, bound);
 	    }
 	}
-	
-	
+
+
 
 
         // implemented by Diego Arroyuelo
         void
         _all_values_in_range(node_type v, range_type r,
                          size_type ilb, std::vector<size_type>& is,
-                         std::vector<size_type>& rank_off, 
+                         std::vector<size_type>& rank_off,
                          std::vector<value_type>& res_vec,
                          bool report, size_type& cnt_answers)
         const
         {
-            
+
             using std::get;
             if (get<0>(r) > get<1>(r))
                 return;
@@ -822,7 +1324,7 @@ class wm_int
 
             if (v.level == m_max_level) {
                 res_vec.emplace_back(v.sym);
-                cnt_answers += 1; 
+                cnt_answers += 1;
                 return;
             } else {
                 rank_off[v.level] = m_tree_rank(is[v.level]);
@@ -834,11 +1336,11 @@ class wm_int
             auto c_r = expand(v, r);
 
             if (!sdsl::empty(get<0>(c_r)) and mid) {
-                _all_values_in_range(get<0>(c_v),get<0>(c_r), ilb, is, 
+                _all_values_in_range(get<0>(c_v),get<0>(c_r), ilb, is,
                                  rank_off, res_vec, report, cnt_answers);
             }
             if (!sdsl::empty(get<1>(c_r))) {
-                _all_values_in_range(get<1>(c_v), get<1>(c_r), mid, is, 
+                _all_values_in_range(get<1>(c_v), get<1>(c_r), mid, is,
                                      rank_off, res_vec, report, cnt_answers);
             }
         }
@@ -862,8 +1364,8 @@ class wm_int
                 res_vec.emplace_back(v.sym);
                 cnt_answers += 1;
                 return;
-            } 
-              
+            }
+
             size_type irb = ilb + (1ULL << (m_max_level-v.level));
             size_type mid = (irb + ilb)>>1;
 
@@ -883,8 +1385,8 @@ class wm_int
         // Implemented by Diego Arroyuelo
         template<typename word_t>
         std::vector<value_type>
-        all_active_p_values_in_range(size_type lb, size_type rb, 
-                                   std::vector<word_t>& B_wt, word_t D, 
+        all_active_p_values_in_range(size_type lb, size_type rb,
+                                   std::vector<word_t>& B_wt, word_t D,
                                    bool report=true) const
         {
 
@@ -892,7 +1394,7 @@ class wm_int
             std::vector<value_type> res_vec;
             if (lb <= rb) {
                 std::vector<size_type> is(m_max_level+1);
-                std::vector<size_type> rank_off(m_max_level+1); 
+                std::vector<size_type> rank_off(m_max_level+1);
                 _all_active_p_values_in_range<word_t>(root(), {lb, rb}, 0, is,
                                  rank_off, res_vec, report, cnt_answers, B_wt, D, 1);
             }
@@ -904,13 +1406,13 @@ class wm_int
         void
         _all_active_p_values_in_range(node_type v, range_type r, size_type ilb, std::vector<size_type>& is,
                          std::vector<size_type>& rank_off, std::vector<value_type>& res_vec,
-                         bool report, size_type& cnt_answers, std::vector<word_t>& B_wt, 
+                         bool report, size_type& cnt_answers, std::vector<word_t>& B_wt,
                          word_t D, uint64_t pos_in_B_wt)
         const
         {
             //if (pos_in_B_wt >= B_wt.size()) return;
             if (!(B_wt[pos_in_B_wt] & D)) return;  // aqui debo tener cuidado cuando esté en el ultimo nivel, dado que allí debo acceder al arreglo B original, el del automata. Voy a necesitar una funcion que me de acceso a eso.
-            //std::cout << pos_in_B_wt << " " << B_wt[pos_in_B_wt] << " & " << D << std::endl;  
+            //std::cout << pos_in_B_wt << " " << B_wt[pos_in_B_wt] << " & " << D << std::endl;
             //if (pos_in_B_wt >= B_wt.size() || !(B_wt[pos_in_B_wt] & D)) return; // no active values in this subtree, get out.
 
             using std::get;
@@ -953,7 +1455,7 @@ class wm_int
 
             size_type cnt_answers = 0;
             if (lb <= rb) {
-                _all_active_p_values_in_range_test<word_t>(root(), {lb, rb}, 0, 
+                _all_active_p_values_in_range_test<word_t>(root(), {lb, rb}, 0,
                                      res_vec, /*cnt_answers,*/ B_wt, D, 1);
             }
         }
@@ -961,13 +1463,13 @@ class wm_int
 
         template<typename word_t>
         void
-        _all_active_p_values_in_range_test(node_type v, range_type r, size_type ilb, 
+        _all_active_p_values_in_range_test(node_type v, range_type r, size_type ilb,
                          std::vector<std::pair<value_type, std::pair<size_type, size_type>>>& res_vec,
                          /*size_type& cnt_answers,*/ std::vector<word_t>& B_wt,
                          word_t D, uint64_t pos_in_B_wt)
         const
         {
-            if (!(B_wt[pos_in_B_wt] & D)) return; 
+            if (!(B_wt[pos_in_B_wt] & D)) return;
 
             using std::get;
             if (get<0>(r) > get<1>(r))
@@ -981,7 +1483,7 @@ class wm_int
                 //cnt_answers += 1; // sdsl::size(r);
                 return;
             }
-            
+
             size_type irb = ilb + (1ULL << (m_max_level-v.level));
             size_type mid = (irb + ilb)>>1;
 
@@ -994,7 +1496,7 @@ class wm_int
                                  res_vec, /*report, cnt_answers,*/ B_wt, D, 2*pos_in_B_wt);
             }
             if (!sdsl::empty(get<1>(c_r))) {
-                _all_active_p_values_in_range_test<word_t>(get<1>(c_v), get<1>(c_r), 
+                _all_active_p_values_in_range_test<word_t>(get<1>(c_v), get<1>(c_r),
                                  mid, res_vec, /*report,*/
                                  /*cnt_answers,*/ B_wt, D, 2*pos_in_B_wt+1);
             }
@@ -1013,7 +1515,7 @@ class wm_int
             std::vector<std::pair<value_type, word_t>> res_vec;
             if (lb <= rb) {
                 std::vector<size_type> is(m_max_level+1);
-                std::vector<size_type> rank_off(m_max_level+1); 
+                std::vector<size_type> rank_off(m_max_level+1);
                 _all_active_s_values_in_range(root(), {lb, rb}, 0, is,
                                  rank_off, res_vec, report, cnt_answers, D_wt, D, 1);
             }
@@ -1043,7 +1545,7 @@ class wm_int
         template <typename word_t>
         word_t
         _all_active_s_values_in_range_test(node_type v, range_type r, size_type ilb, /*std::vector<size_type>& is,
-                         std::vector<size_type>& rank_off,*/ 
+                         std::vector<size_type>& rank_off,*/
                          std::vector<std::tuple<
                                                 value_type,
 						word_t,
@@ -1052,8 +1554,8 @@ class wm_int
                          word_t D, uint64_t pos_in_D_wt)
         const
         {
-            word_t Dtemp = D_wt.atPos(pos_in_D_wt); 
-            if ((Dtemp | D) == Dtemp) return Dtemp;  
+            word_t Dtemp = D_wt.atPos(pos_in_D_wt);
+            if ((Dtemp | D) == Dtemp) return Dtemp;
 
             //D_wt[pos_in_D_wt] = /*D_wt.atPos(pos_in_D_wt)*/ Dtemp | (D & ~Dtemp);
 
@@ -1070,13 +1572,13 @@ class wm_int
 				     ));
                 cnt_answers += 1; // sdsl::size(r);
                 return answ;
-            } 
+            }
             size_type irb = ilb + (1ULL << (m_max_level-v.level));
             size_type mid = (irb + ilb)>>1;
 
             auto c_v = expand(v);
             auto c_r = expand(v, r);
-       
+
             //D_wt[pos_in_D_wt] = /*D_wt.atPos(pos_in_D_wt)*/ Dtemp | D;
             word_t answ1, answ2;
             if (!sdsl::empty(get<0>(c_r)) and  mid) {
@@ -1092,7 +1594,7 @@ class wm_int
             } else
                 answ2 = Dtemp; // D_wt.atPos(2*pos_in_D_wt+1);
 
-            /*word_t answ =*/ D_wt[pos_in_D_wt] = answ1 & answ2; 
+            /*word_t answ =*/ D_wt[pos_in_D_wt] = answ1 & answ2;
             /*if (D_wt[pos_in_D_wt] != (D_wt.atPos(2*pos_in_D_wt) & D_wt.atPos(2*pos_in_D_wt+1))) {
                 cout << "son distintos en posicion " << pos_in_D_wt << endl;
                 cout << D_wt[pos_in_D_wt] << " versus " << (D_wt.atPos(2*pos_in_D_wt) & D_wt.atPos(2*pos_in_D_wt+1)) << endl;
@@ -1149,7 +1651,7 @@ class wm_int
                                  mid, is, rank_off, res_vec, report,
                                  cnt_answers, D_wt, D, 2*pos_in_D_wt+1);
             }
-            
+
 	    D_wt[pos_in_D_wt] = D_wt.atPos(2*pos_in_D_wt) & D_wt.atPos(2*pos_in_D_wt+1);
 
         }
@@ -1171,25 +1673,25 @@ class wm_int
         }
 
         size_type
-        _rel_min_obj_maj(node_type v, value_type vlb, value_type vrb, 
+        _rel_min_obj_maj(node_type v, value_type vlb, value_type vrb,
                          range_type r, size_type ilb)
         const
         {
             using std::get;
-            //std::cout << "[" << get<0>(r) << "," << get<1>(r) << "]" << std::endl; 
+            //std::cout << "[" << get<0>(r) << "," << get<1>(r) << "]" << std::endl;
             if (get<0>(r)+1 > get<1>(r)+1)
                 return m_size+1;  // OJO con el +1, puede estar de mas
 
             if (v.level == m_max_level) {
                 return get<0>(r); // cuidado con esto
-            } 
+            }
             size_type irb = ilb + /*std::min(m_sigma-2,*/(size_type)(1ULL << (m_max_level-v.level))/*)*/;
             size_type mid = (irb + ilb)>>1;
 
             /*std::cout << "[" << ilb << "," << std::min(irb,m_sigma-1) << "] versus [" << vlb << "," << vrb << "]" << std::endl;
             char c;
             std::cin >> c;*/
-            
+
             if (vlb <= ilb and std::min(irb-1,m_sigma-1) <= vrb) {
                 /*std::cout << "[" << ilb << "," << std::min(irb-1,m_sigma-1) << "] is included in [" << vlb << "," << vrb << "]" << std::endl;
                 char d;
@@ -1204,8 +1706,8 @@ class wm_int
             size_type ans1 = m_size + 1, old_ans1 = m_size + 1, ans2 = m_size + 1;
             if (!sdsl::empty(get<0>(c_r)) and  vlb < mid and mid) {
                old_ans1 =  _rel_min_obj_maj(get<0>(c_v), vlb, std::min(vrb,mid-1), get<0>(c_r), ilb);
-               if (old_ans1 != m_size + 1) 
-                   ans1 = m_tree_select0(v.offset-rnk + old_ans1 + 1) - v.offset; 
+               if (old_ans1 != m_size + 1)
+                   ans1 = m_tree_select0(v.offset-rnk + old_ans1 + 1) - v.offset;
             }
             if (!sdsl::empty(get<1>(c_r)) and vrb >= mid) {
                if (ans1 != m_size + 1) {
@@ -1213,15 +1715,15 @@ class wm_int
                    ans2 =  _rel_min_obj_maj(get<1>(c_v), std::max(mid, vlb), vrb, {get<0>(get<1>(c_r)), min}, mid);
                    if (ans2 == m_size + 1)
                        return ans1;
-                   else 
+                   else
                        ans2 = m_tree_select1(rnk + ans2 + 1) - v.offset;
                } else {
                    ans2 = _rel_min_obj_maj(get<1>(c_v), std::max(mid, vlb), vrb, get<1>(c_r), mid);
-                   if (ans2 != m_size + 1) 
+                   if (ans2 != m_size + 1)
                       ans2 = m_tree_select1(rnk + ans2 + 1) - v.offset;
                }
             }
-            
+
             return (ans1 < ans2)? ans1:ans2;
         }
 
@@ -1248,14 +1750,14 @@ class wm_int
             auto c_v = expand(v);
             auto c_r = expand(v, r);
 
-            //std::cout << " > Los hijos del nodo actual son [" << get<0>(get<0>(c_r)) << "," << get<1>(get<0>(c_r)) << "] y [" << get<0>(get<1>(c_r)) << "," << get<1>(get<1>(c_r)) << "]" << std::endl;  
+            //std::cout << " > Los hijos del nodo actual son [" << get<0>(get<0>(c_r)) << "," << get<1>(get<0>(c_r)) << "] y [" << get<0>(get<1>(c_r)) << "," << get<1>(get<1>(c_r)) << "]" << std::endl;
 
 
             size_type ans1 = m_size + 1, ans2 = m_size + 1;
             size_type rnk = m_size + 1;
             /*std::cout << " > Rango de simbolos = [" << vlb << "," << vrb << "]" << std::endl;
             std::cout << " > Se divide en los rangos [" << vlb << "," << std::min(vrb, mid-1) << "] y [" << std::max(mid,vlb) << "," << vrb << "]" << std::endl;
-            std::cout << " > irb = " << irb << std::endl; 
+            std::cout << " > irb = " << irb << std::endl;
             std::cout << " > mid = " << mid << std::endl;
             */
 
@@ -1541,7 +2043,7 @@ class wm_int
             auto left_size  = (r[1]-r[0]+1)-right_size;
             auto right_sp = sp_rank - rank_b;
             auto left_sp  = r[0] - right_sp;
-            
+
             left_int = {left_sp, left_sp + left_size - 1};
             right_int = {right_sp, right_sp + right_size - 1};
 
@@ -1556,8 +2058,8 @@ class wm_int
             v_right.sym    = (v.sym<<1)|1;
 
             return {std::move(v_left), std::move(v_right)};
-	} 
-        
+	}
+
 
         //! Returns the two child nodes of an inner node
         /*! \param v An inner node of a wavelet tree.
